@@ -1,0 +1,276 @@
+function TSbegin
+% Leads the user through the creation of an Experiment structure. Sets up
+% folder structure, copies script and helper functions into MatlabCode
+% subfolder, and puts folder and its subfolders at top of Matlab's search path
+% Prompts user for load parameters, the parameters that must be specified
+% in order to properly load a raw data file into the Experiment structure
+
+% Modified by Randy Gallistel - Nov 10, 2009
+
+if exist('TextForTSbegin.txt','file')==2
+    type TextForTSbegin.txt
+    
+   Str = input('\nReady to continue? (Respond y) \nIf not, hit return and start again when you are. ','s');
+   
+   if strcmp('y',Str) % continue
+   else
+       return % stop
+   end
+end
+  
+ExperID = input('\n\nLaboratory''s ID number for this experiment? \n It must be a  number and unique to this experiment. ');
+
+disp(strvcat(' ','Pick or create the parent directory, in which',...
+    'the folder for this experiment will be placed. If',...
+    'the script is to be run on line, analyzing the',...
+    'data at regular intervals as they are generated,',...
+    'then, the folder must be one that the data files',...
+    'to which MedPC writes can be copied into, for',...
+    'example, Dropbox. The script and associated helper',...
+    'functions will be copied into the folder for this',...
+    'experiment. The folder will be placed at the top',...
+    'of Matlab''s search path.',' '))
+
+ParentDir = [uigetdir([],'Parent directory (e.g., Dropbox') '/'];
+
+[~,Mess] = mkdir(ParentDir,['Experiment' num2str(ExperID)]);
+
+if ~isempty(Mess)
+    disp(strvcat(' ',['Warning: ',Mess]))
+    fprintf('\nFolder for this experiment already created;\ndid not overwrite it.\n')
+end
+
+cd ([ParentDir ['Experiment' num2str(ExperID)]]);
+
+Pth = cd; % path to folder for this experiment
+
+[~,Mess] = mkdir('DataArchive');
+if ~isempty(Mess)
+    disp(strvcat(' ',['Warning: ',Mess]))
+    fprintf('\nDataArchive folder already created;\ndid not overwrite it.\n')
+end
+
+[~,Mess] = mkdir('DataTemp');
+if ~isempty(Mess)
+    disp(strvcat(' ',['Warning: ',Mess]))
+    fprintf('\nDataTemp folder already created;\ndid not overwrite it.\n')
+end
+
+[~,Mess] = mkdir('MatlabCode');
+if ~isempty(Mess)
+    disp(strvcat(' ',['Warning: ',Mess]))
+    fprintf('\nMatlabCode folder already created;\ndid not overwrite it.\n')
+end
+
+PthToMatlabCode = [Pth '/MatlabCode/'];
+
+[~,Mess] = mkdir('Plots');
+if ~isempty(Mess)
+    disp(strvcat(' ',['Warning: ',Mess]))
+    fprintf('\nPlots folder already created;\ndid not overwrite it.\n')
+end
+
+SubIDs = input('\n Vector of Subject ID numbers(!): \n e.g., [107 114 34 1011] or 1011:1023 ');
+
+Species = input('\n Species? [e.g. Mouse] ','s');
+ % prompts user (strings must be finished on the line on which they are
+ % started)
+
+Strain = input('\n Strain? [e.g., C57BL/6j] \n If more than one, enter cell array \n with one cell per subject, e.g. {''wildtype'',''+-'',''--''} ','s');
+
+if strfind(Strain,'{') % if cell array was returned (at this point, it
+    % is just a string)
+
+    Strain = eval(Strain); % converts string to an actual cell array
+
+end
+
+Lab = input('\n Laboratory? [e.g., Gallistel] ','s');
+
+TSinitexperiment(['Experiment' num2str(ExperID)],ExperID,SubIDs,Species,Lab);
+
+global Experiment
+
+disp(strvcat(' ','Browse for text file that contains event codes'))
+
+TSimporteventcodes;
+
+estr = 'input(''\n String or string variable specifying sex for each subject, e.g., MMMFFF '',''s'');';
+
+Sx = evalin('base',estr); % subject's response may be empty or a string
+% specifying sex of each subject or name of a variable in the base workspace
+% containing such a string
+
+if isempty(Sx)
+    
+    estr = 'input(''\n You will regret not specifying the sex; 2nd chance: '',''s'');';
+    
+    Sx = evalin('base',estr);
+    
+end 
+
+if evalin('base',sprintf('exist(''%s'',''var'')',Sx)) % if response was
+    % name of a variable in the base workspace
+    
+    Sx = evalin('base',Sx); % reach into base workspace and assign contents
+    % of that variable to Sx
+    
+end
+
+if ~isempty(Sx)
+    while length(Sx) ~= length(SubIDs)
+        fprintf('\nLength of sex string not equal to # of subjects\n')
+        Sx = input('New string specifying sexes: ');
+    end
+end
+        
+estr = 'input(''\n Vector of arrival weights. If unknown, hit Rtn '');';
+
+ArWt = evalin('base',estr); % response may be the vector or a variable in
+% the workspace containg the vector; in either case, ArWt will now be
+% that vector. If response is neither, there will be an error message
+% displayed and a renewed prompt (this is a feature of input)
+
+if ~isempty(ArWt)
+    while length(ArWt) ~= length(SubIDs)
+        fprintf('\nLength of arrival-weight vector ~= # subjects\n')
+        ArWt = input('New vector of arrival weights: ');
+    end
+end
+    
+estr = 'input(''\n Matlab date vector specifying arrival date, \n e.g. [2009 08 21] \n If unknown, or various, or \n to-be-filled-in using TSexperimentbrowser, hit Rtn '');';
+
+ArDt = evalin('base',estr); % in case response gives the variable containing
+% the date vector
+
+Srce = input('\n Source/Supplier? [e.g., Harlan] ','s');
+
+for sub = 1:Experiment.NumSubjects
+
+    Experiment.Subject(sub).Sex = Sx(sub);
+
+    if ~isempty(ArWt)
+        Experiment.Subject(sub).ArrivalWeight = ArWt(sub);
+    end
+
+    if ~isempty(ArDt)
+        Experiment.Subject(sub).ArrivalDate = ArDt;
+    end
+
+    if ischar(Strain)
+
+        Experiment.Subject(sub).Strain = Strain;
+
+    elseif iscell(Strain)
+
+        Experiment.Subject(sub).Strain = Strain{sub};
+
+    end
+
+    if ~isempty(Srce)
+        Experiment.Subject(sub).Source = Srce;
+    end
+    
+    Experiment.Subject(sub).MacroInfo = struct('date',[],'progpath',[],...
+        'program',[],'box',[],'id',[],'ExpId',[],'group',0,'macroname',[]);
+                 
+end % of stepping through subjects
+
+disp(strvcat(' ', 'Browse for folder containing the MedPC programs.', ' '))
+browsegui = uigetdir([], 'Find file containing process-control program(s)');
+
+if browsegui(1)==0; return; end     % if canceled, return 0
+%%
+
+disp(strvcat(' ','Browse for folder containing the helper functions',...
+    'In the unlikely event that no helper functions are used,',...
+    'click on Cancel.'))
+
+HlprFunDr = uigetdir([],'Find helper functions');
+
+if HlprFunDr(1)==0;return;end % If browse was canceled, result returned is 0
+
+[Suc,Mess] = copyfile([HlprFunDr '/*.m'],PthToMatlabCode);
+
+if Suc
+    disp(strvcat('Have copied helper functions to MatlabCode subdirectory,',...
+        'which has been placed at top of Matlab''s search path.',...
+        'These helper functions will now overshadow functions',...
+        'with same name elsewhere on Matlab''s search path.'))
+else
+    disp(Mess)
+end
+%%
+disp(strvcat(' ','The load parameters specify:',...
+    ' i) time unit in the raw data files',...
+    ' ii) time unit to be used in Experiment structure',...
+    ' iii) the load function to be used to read the raw data files',...
+    ' iv) the prefix character, if any, that marks raw data files',...
+    ' v) the extension, if any, that marks raw data files',' '))
+
+LP = input('Use the default values for load parameters? \n Answer Rtn for yes or ''?'' to answer queries. ','s');
+    
+    
+if ~isempty(LP) && strcmp(LP,'?')
+    
+    fprintf('\nTo accept default values in following queries, hit Rtn. \nWhen making string responses, do not enclose in single quotes\n\n')
+    
+    RawUnit =...
+        input('What is the unit of time, in seconds, for time stamps in raw data? \n Default = .02 ');
+    
+    if isempty(RawUnit);else Experiment.Info.InputTimeUnit = RawUnit;end
+    
+    StrucUnit =...
+        input('\n What is the unit of time, in seconds, \n to be used in Experiment structure? \n Default = 1; for minutes, enter 60 ');
+    
+    if isempty(StrucUnit);else Experiment.Info.OutputTimeUnit = StrucUnit;end
+    
+    disp(strvcat(' ','If uncertain how to answer following query,',...
+        'hit Rtn & to accept default and subsequently type',...
+        'help TSloadsessions   &/or help TSsetloadparameters.',...
+        'You may need to create a custom load function; it depends',...
+        'on the format of your raw data files.',' '))
+    LdFun =...
+        input('What is the function to be used in reading raw data files? \n Default = TSloadMEDPC ','s');
+    
+    if isempty(LdFun);else Experiment.Info.LoadFunction = LdFun;end
+    
+    PrefChar =...
+        input('\n What prefix character marks raw data files? Default = ''! ','s');
+    
+    if isempty(PrefChar);else Experiment.Info.FilePrefix = PrefChar;end
+    
+    Ext =...
+        input('\n What extension distinguishes raw data files? Default = none','s');
+    
+    if isempty(Ext);else Experiment.Info.FileExtension = Ext;end
+    
+end % else/if default or custom load parameters
+    
+% if strcmp('y',input('\nLoad default sequence of protocols for all subjects? [y/n] ','s'))
+%     
+%     olddir = cd;
+%     if strcmp(DropboxPath(1),'/')
+%         OnMac = 1;
+%         slash = '/';
+%     else
+%         OnMac = 0;
+%         slash = '\';
+%     end
+%     cd([DropboxPath slash 'MyToolbox' slash 'TSlib' slash 'Core Routines'])
+%     load('DefaultProtocolSequence.mat')
+%     cd(olddir)
+%     
+%     for S = 1:Experiment.NumSubjects
+%         
+%         Experiment.Subject(S).Protocols = Prot;
+%         
+%     end
+%     
+%     
+% end % if same sequence for all subs
+        
+cd(ParentDir)
+
+TSsaveexperiment(sprintf('Experiment%d/Experiment%d',ExperID,ExperID));
+    

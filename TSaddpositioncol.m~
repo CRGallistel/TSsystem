@@ -1,0 +1,71 @@
+function TSaddpositioncol(StartPosition)
+% Creates a TSDataP field that contains same data as TSData field, but
+% with 3rd col giving position of wheel at each even. One can make this the
+% active data field when analyzing wheel data. I will modify TSparse so
+% that has 'position' as a privileged word (as well as 'time' etc)
+%
+% Syntax:  TSaddpositioncol(StartPosition)
+%
+% StartPosition is the position of the wheel when session begins, e.g.
+% 85000
+
+global Experiment
+
+AS = Experiment.Info.ActiveSubjects;
+
+
+for S = AS % stepping through the subjects
+    
+    
+    if strcmp('all',Experiment.Info.ActiveSessions)
+
+        Experiment.Info.ActiveSessions = 1:Experiment.Subject(S).NumSessions;
+        
+    end
+
+    As = Experiment.Info.ActiveSessions;
+    
+    for s= As % stepping through the sessions
+        
+        if isempty(Experiment.Subject(S).Session(s).TSData)
+            continue % go to next session    
+        end
+
+        D = Experiment.Subject(S).Session(s).TSData;
+
+        LVpos = D(:,2)>2100; % logical vector flags position events
+
+        FrstPosR = find(D(:,2)>2100,1); % row # of first position event
+
+        if isempty(FrstPosR) % wheel never moved
+
+            D(:,3) = StartPosition; 
+            Experiment.Subject(S).Session(s).TSDataP = D;
+
+            continue % go to next session
+
+        end % if wheel never moved
+
+        NonPosR = find(D(:,2)<2100); % row #s for non-position events
+
+        D(LVpos,3) = D(LVpos,2); % copying positions into 3rd col
+
+
+        if FrstPosR > 1 % if first event is not a position event
+
+            D(1,3) = StartPosition; % (assumed) position of wheel at start of session
+
+        end
+        %%
+        for r = NonPosR(2:end)' % stepping through the rows that record non-positional
+          % events
+
+          D(r,3) = D(r-1,3);
+
+        end
+
+        Experiment.Subject(S).Session(s).TSDataP = D;
+        
+    end % of stepping through sessions
+    
+end % of stepping through subjects

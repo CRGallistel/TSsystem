@@ -1,0 +1,64 @@
+% TSRMFIELD     Removes all instances of a field from the specified level
+%   Takes two arguments, a string which is the name of the field to remove.
+%   Will traverse entire Experiment and remove all instances. Useful for
+%   removing statistics which are no longer necessary.
+function TSrmfieldRev(Level,field)
+
+if evalin('base','isempty(who(''global'',''Experiment''))')        % Verifies that an Experiment structure exists
+    error('There is no expriment structure defined.');    % Will not execute if no Experiment has been set up
+    return; 
+elseif ~strcmp(Level,{'Experiment' 'Subject' 'Session' 'Trial'})
+    fprintf('\nFirst argument must be one of the following level-identifying words:\n    Experiment Subject Session Trial\nenclosed in single quotes\n')
+    return
+end
+
+global Experiment;
+
+switch Level
+    
+    case 'Experiment'
+        
+        if strcmp('y',input(sprintf('\nDo you want to remove the field %s from the Experiment level? [y/n] ',field),'s'))
+        
+            Experiment = rmfield(Experiment,field);
+        else
+            return
+        end
+    
+    case 'Subject'
+        
+        if strcmp('y',input(sprintf('\nDo you want to remove the field %s from the Subject level? [y/n] ',field),'s'))
+
+            Experiment.Subject = rmfield(Experiment.Subject,field);
+        else
+            return
+        end
+        
+    case 'Session'
+        
+        if strcmp('y',input(sprintf('\nDo you want to remove the field %s from the Session level? [y/n] ',field),'s'))
+        
+            for S=1:Experiment.NumSubjects
+
+                Experiment.Subject(S).Session = rmfield(Experiment.Subject(S).Session,field);
+            end
+        else
+            return
+        end
+        
+    case 'Trial'
+        
+        trialname = Experiment.Info.ActiveTrialType; % active trial
+        
+        if strcmp('y',input(sprintf('\nDo you want to remove the field %s from the Trials of Type %s? [y/n] ',field,trialname),'s'))
+        
+            for S = 1:Experiment.NumSubjects
+                for s = 1:Experiment.Subject(S).NumSessions
+                    Experiment.Subject(S).Session(s).(trialname).Trial =...
+                        rmfield(Experiment.Subject(S).Session(s).(trialname).Trial,field);
+                end
+            end
+        else
+            return
+        end
+end

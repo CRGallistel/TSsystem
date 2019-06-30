@@ -1,0 +1,80 @@
+% TSDEFINETRIALTYPE  Define a trial type.
+%   TSDEFINETRIALTYPE(TRIALNAME,CODES) defines a trial named <trialname> 
+%   (note: Internally the trial is renamed "Trial"<trialname>). 
+%   TRIALNAME denotes the name for the new trial. CODES denotes a series of
+%   MATCHCODES (see TSmatch) that define when a trial has taken place. It
+%   is a cell array of arrays that define a trial. An array will
+%   match as a trial if all of its codes appear in the TSdata in the
+%   order specified. The code number 0 can be used to indicate the
+%   start of a session and the code number Inf can be used to indicate
+%   the end of a session.
+%
+%   TSdeclareeventcodes must be executed before TSDEFINETRIALTYPE in order to 
+%   define each code name. 
+%
+%   Examples:
+%
+%       Simplest example would be:
+%
+%       TSdefinetrial('Simple',{[StartTrial EndTrial]});
+%
+%
+%       If there are 2 trial types, it might be:
+%
+%       TSdefinetrial('BothTypes',{[StartTrial1 EndTrial] [StartTrial2 EndTrial});
+%
+%       
+%       Suppose that the trial type is picked by the subject a little into
+%       the offical start of the trial. 
+%
+%       TSdefinetrial('EitherChoice', {[StartTrial PokeOn1 EndTrial] ...
+%       [StartTrial PokeOn2 EndTrial]});
+%
+%
+%       There can also be negative codes to indicate something that would
+%       make a trial not count. For example
+%
+%       TSdefinetrial('Success', {[StartTrial -TrialFailed EndTrial]}
+%       
+%       Conversely,
+%
+%       TSdefinetrial('Success', {[StartTrial TrialFailed EndTrial]}
+%
+%       
+%       Matchcodes can be infinitely complex, and any set that works for
+%       TSmatch works as a trial definition.
+%
+%	See also TSMATCH, TSSETTRIAL
+
+
+function [result] = TSdefinetrial(trialname,varargin)
+
+if evalin('base','isempty(who(''global'',''Experiment''))')    % Verifies that an Experiment structure exists
+    error('There is no experiment structure');
+    result=0;
+    return;
+end;
+
+global Experiment;
+
+name=['Trial' trialname];
+
+if numel(varargin) == 1
+varargin = varargin{:};
+end
+
+if isfield(Experiment, name) && ~isequal(Experiment.(name), varargin)
+   warning('USER ATTEMPTED TO REDEFINE AN EXISTING TRIAL.');
+   disp ('To continue with this operation, you must delete all existing references to this trial or');
+   disp ('risk undefined behavior. To continue, please choose using the popup menu.');
+   k = menu(['Really delete ' name '?'], 'No.','Yes, delete and use new definition.');
+   if (k == 1)
+       disp ('Operation aborted.');
+       return;
+   end
+   TSrmfield(name);
+   disp ('Operation succesful.');
+end
+
+Experiment.(name) = varargin;
+Experiment.Info.ActiveTrial = name;

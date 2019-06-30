@@ -1,0 +1,123 @@
+function Result = TSaddsubjects
+% adds subject(s) to the Experiment structure by prompting user for vector
+% of ID numbers for the subjects to be added
+
+global Experiment
+
+OldIDs = [Experiment.Subject.SubId]';
+
+SubIDs = input('\n Vector of Subject ID numbers(!): \n e.g., [107 114 34 1011] or 1011:1023 ');
+
+Confl = intersect(SubIDs,Experiment.Subjects);
+
+if ~ isempty(Confl)
+    display({['IDs ' num2str(Confl) ' are already in the Experiment'];...
+        'Assign all new subjects non-conflicting ID numbers;';
+        'then, call TSaddsubjects again'})
+    return
+end
+
+Strain = input('\n Strain? [e.g., C57BL/6j] \n If more than one, enter cell array \n with one cell per subject, e.g. {''wildtype'',''+-'',''--''} ','s');
+
+if strfind(Strain,'{') % if cell array was returned (at this point, it
+    % is just a string)
+
+    Strain = eval(Strain); % converts string to an actual cell array
+
+end
+
+Sx = input('\n String specifying sex for each subject, e.g., MMMFFF ','s');
+
+ArWt = input('\n Vector of arrival weights. If unknown, hit Rtn ');
+
+ArDt = input('\n Matlab date vector specifying arrival date, \n e.g. [2009 08 21] \n If unknown, or various, or \n to-be-filled-in using TSexperimentbrowser, hit Rtn ');
+
+Srce = input('\n Source/Supplier? [e.g., Harlan] ','s');
+
+Experiment.NumSubjects = Experiment.NumSubjects + length(SubIDs);
+
+Experiment.Subjects = sort([Experiment.Subjects SubIDs]);
+
+
+for sub = 1:length(SubIDs) 
+
+    Experiment.Subject(end+1).Sex = Sx(sub);
+    
+    Experiment.Subject(end).SubId = SubIDs(sub);
+
+    if ~isempty(ArWt)
+        Experiment.Subject(end).ArrivalWeight = ArWt(sub);
+    end
+
+    if ~isempty(ArDt)
+        Experiment.Subject(end).ArrivalDate = ArDt;
+    end
+
+    if ischar(Strain)
+
+        Experiment.Subject(end).Strain = Strain;
+
+    elseif iscell(Strain)
+
+        Experiment.Subject(end).Strain = Strain{sub};
+
+    end
+
+    if ~isempty(Srce)
+        Experiment.Subject(end).Source = Srce;
+    end
+    
+end % of stepping through new subjects
+
+%% Resorting the subjects so that index order same as ID order
+% TSloadsessions assumes this to be the case!!
+
+if ~strcmp('all',Experiment.Info.ActiveSubjects)
+    
+    IDs = [Experiment.Subject.SubId]'; % list of IDs before sorting
+    
+    IndxOfNewSs = ~ismember(IDs,OldIDs); % vector flagging the IDs of the
+    % newly added subjects. OldIDs variable was computed at start of
+    % function
+    
+    NewAS = 1:length(IDs); % this will become the new list of active subjects
+    % (see later if)
+    
+    OldIndxOfNewSs = NewAS(IndxOfNewSs); % index numbers of the
+    % newly added subjects before sorting
+    
+    OldAS = Experiment.Info.ActiveSubjects; % presort index numbers of the old
+    % subjects that are active subjects.
+    
+end
+
+
+[SubIDs,I] = sort([Experiment.Subject.SubId]'); % I is the old index #s
+% in the new order
+
+for S = 1:Experiment.NumSubjects
+    % stepping through the subjects in their current order
+    
+    NwIndx = find(SubIDs==Experiment.Subject(S).SubId);
+    
+    Tmp(NwIndx) = Experiment.Subject(S);
+    
+end
+
+Experiment.Subject(1:length(Tmp))=Tmp;
+
+if ~strcmp('all',Experiment.Info.ActiveSubjects)
+    
+    Experiment.Info.ActiveSubjects = NewAS(ismember(I,OldIndxOfNewSs)...
+        | ismember(I,OldAS)); % new active Ss are the newly added subjects
+    % together with those that were active before the additions
+    
+end
+
+display(char({'Warning: Subjects resorted to make the order';...
+    'of their index numbers the same as order of their ID numbers';...
+    'If any subject just added has a lower ID number';...
+    'than subject(s) already in structure, those';...
+    'old subjects will now have new index numbers!!';...
+    'Use TSexperimentbrowser to determine their';...
+    'new index numbers.'}))
